@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6366F1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Planeador André Q1 2025</title>
+  
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #root { 
+      width: 100%; 
+      min-height: 100vh; 
+    }
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <!-- React, ReactDOM e Recharts -->
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.js"></script>
+  
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+  
+  <!-- Mock do window.storage para funcionar sem Claude -->
+  <script>
+    // Storage mock usando localStorage
+    window.storage = {
+      async get(key) {
+        try {
+          const value = localStorage.getItem(key);
+          return value ? { key, value, shared: false } : null;
+        } catch (e) {
+          return null;
+        }
+      },
+      async set(key, value) {
+        try {
+          localStorage.setItem(key, value);
+          return { key, value, shared: false };
+        } catch (e) {
+          return null;
+        }
+      },
+      async delete(key) {
+        try {
+          localStorage.removeItem(key);
+          return { key, deleted: true, shared: false };
+        } catch (e) {
+          return null;
+        }
+      },
+      async list(prefix) {
+        try {
+          const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+          return { keys, prefix, shared: false };
+        } catch (e) {
+          return { keys: [], shared: false };
+        }
+      }
+    };
+  </script>
+  
+  <!-- Aplicação React -->
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } = Recharts;
+
+// ═══════════════════════════════════════════════════════════════════
+// CONSTANTES DE PERÍODO
+// ═══════════════════════════════════════════════════════════════════
+const TODAY      = "2026-02-14";
+const FIRST_DAY  = "2026-02-02";
+const LAST_DAY   = "2026-03-31";
+
+// ═══════════════════════════════════════════════════════════════════
+// ATIVIDADES
+// ═══════════════════════════════════════════════════════════════════
+const WD = [
+  { id:"w1", em:"📖", nome:"Estudar para a escola",       area:"Escola",      min:60,  tgt:5, cor:"#6366F1" },
+  { id:"w2", em:"🎧", nome:"Aula de inglês online",        area:"Inglês",      min:15,  tgt:5, cor:"#22D3A0" },
+  { id:"w3", em:"🎬", nome:"Série ou filme em inglês",     area:"Inglês",      min:15,  tgt:5, cor:"#22D3A0" },
+  { id:"w4", em:"✍️", nome:"Exercícios de gramática",     area:"Português",   min:15,  tgt:5, cor:"#F59E0B" },
+  { id:"w5", em:"🔊", nome:"Leitura em voz alta",          area:"Português",   min:15,  tgt:5, cor:"#F59E0B" },
+  { id:"w6", em:"📚", nome:"Leitura de um livro",          area:"Cultura",     min:30,  tgt:5, cor:"#F97316" },
+  { id:"w7", em:"⚽", nome:"Desporto e exercício",         area:"Saúde",       min:60,  tgt:2, cor:"#4ADE80" },
+  { id:"w8", em:"🧹", nome:"Arrumar e limpar",             area:"Organização", min:15,  tgt:5, cor:"#94A3B8" },
+  { id:"w9", em:"❤️", nome:"Tempo com a família",         area:"Família",     min:30,  tgt:3, cor:"#EC4899" },
+];
+
+const FDS = [
+  { id:"e1", em:"📖", nome:"Estudar para a escola",        area:"Escola",      min:90,  tgt:2, cor:"#6366F1" },
+  { id:"e2", em:"✍️", nome:"Leitura, interpretação e cópia", area:"Português", min:60, tgt:1, cor:"#F59E0B" },
+  { id:"e3", em:"💻", nome:"Curso de apps e IA",            area:"Tecnologia", min:60,  tgt:1, cor:"#A855F7" },
+  { id:"e4", em:"🎨", nome:"PowerPoint e Canva",            area:"Tecnologia", min:120, tgt:1, cor:"#A855F7" },
+  { id:"e5", em:"🏺", nome:"Escultura online",              area:"Cultura",    min:120, tgt:1, cor:"#F97316" },
+  { id:"e6", em:"🧹", nome:"Arrumar e limpar",              area:"Organização",min:30,  tgt:2, cor:"#94A3B8" },
+  { id:"e7", em:"❤️", nome:"Tempo com a família",          area:"Família",    min:120, tgt:1, cor:"#EC4899" },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// SEMANAS — 8 completas + 2 dias finais = cobertura total até 31 Mar
+// Nota: semanas 3-8 + "Dias Finais" cobrem o mês de Março
+// ═══════════════════════════════════════════════════════════════════
+const SEMANAS = [
+  { num:1, label:"Semana 1",      start:"2026-02-02", mes:"fev", days:7 },
+  { num:2, label:"Semana 2",      start:"2026-02-09", mes:"fev", days:7 },
+  { num:3, label:"Semana 3",      start:"2026-02-16", mes:"mar", days:7 },
+  { num:4, label:"Semana 4",      start:"2026-02-23", mes:"mar", days:7 },
+  { num:5, label:"Semana 5",      start:"2026-03-02", mes:"mar", days:7 },
+  { num:6, label:"Semana 6",      start:"2026-03-09", mes:"mar", days:7 },
+  { num:7, label:"Semana 7",      start:"2026-03-16", mes:"mar", days:7 },
+  { num:8, label:"Semana 8",      start:"2026-03-23", mes:"mar", days:7 },
+  { num:9, label:"Dias Finais",   start:"2026-03-30", mes:"mar", days:2 },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// METAS SMART TRIMESTRAIS — recalculadas para o período completo
+// Período total: 42 dias úteis + 16 dias de fim de semana (58 dias)
+// WD tgt5: 42 × min | WD tgt2: 42×(2/5)×min | WD tgt3: 42×(3/5)×min
+// FDS tgt2: 16×min  | FDS tgt1: 16×(1/2)×min
+// ═══════════════════════════════════════════════════════════════════
+const SMART = [
+  { ids:["w1","e1"], icon:"📖", label:"Escola & Estudo",
+    goal:"Melhorar notas · chegar preparado aos testes",
+    tgt: Math.round(42*60 + 16*90), cor:"#6366F1" },            // 2520+1440=3960
+  { ids:["w2","w3"], icon:"🇬🇧", label:"Inglês",
+    goal:"Completar o nível · manter uma conversa básica",
+    tgt: Math.round(42*15 + 42*15), cor:"#22D3A0" },            // 630+630=1260
+  { ids:["w4","w5","e2"], icon:"✍️", label:"Português",
+    goal:"Reduzir erros · ganhar fluidez oral e escrita",
+    tgt: Math.round(42*15 + 42*15 + 16*0.5*60), cor:"#F59E0B" },// 630+630+480=1740
+  { ids:["w6","e5"], icon:"📚", label:"Cultura & Leitura",
+    goal:"4+ livros lidos · 8 projetos de escultura",
+    tgt: Math.round(42*30 + 16*0.5*120), cor:"#F97316" },       // 1260+960=2220
+  { ids:["e3","e4"], icon:"💻", label:"Tecnologia",
+    goal:"Dominar 8+ ferramentas digitais",
+    tgt: Math.round(16*0.5*60 + 16*0.5*120), cor:"#A855F7" },   // 480+960=1440
+  { ids:["w7"], icon:"⚽", label:"Saúde & Desporto",
+    goal:"30+ sessões de exercício físico",
+    tgt: Math.round(42*(2/5)*60), cor:"#4ADE80" },               // ~1008
+  { ids:["w8","e6"], icon:"🧹", label:"Organização",
+    goal:"Hábito de arrumação consolidado",
+    tgt: Math.round(42*15 + 16*30), cor:"#94A3B8" },             // 630+480=1110
+  { ids:["w9","e7"], icon:"❤️", label:"Família",
+    goal:"Momentos de qualidade todas as semanas",
+    tgt: Math.round(42*(3/5)*30 + 16*0.5*120), cor:"#EC4899" }, // 756+960=1716
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// DESIGN TOKENS
+// ═══════════════════════════════════════════════════════════════════
+const BG="#080D18", C1="#0D1424", C2="#111827", C3="#1A2235";
+const BRD="rgba(255,255,255,0.06)", TXT="#F1F5F9", SUB="#64748B";
+const ACC="#6366F1", GRN="#22D3A0", YLW="#F59E0B", ORG="#F97316";
+const FONT_H="'Exo 2', sans-serif", FONT_B="'Nunito', sans-serif";
+
+const PT_M=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const PT_D=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const PT_DL=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+
+// ═══════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════
+const isFds = ds => { const dw=new Date(ds+"T12:00:00").getDay(); return dw===0||dw===6; };
+const ds2date = ds => new Date(ds+"T12:00:00");
+const date2ds = d  => d.toISOString().split("T")[0];
+
+function addDays(ds, n) {
+  const d=ds2date(ds); d.setDate(d.getDate()+n); return date2ds(d);
+}
+
+function weekDates(startStr, num=7) {
+  return Array.from({length:num},(_,i)=>addDays(startStr,i));
+}
+
+function fmtFull(ds) {
+  const d=ds2date(ds);
+  return `${PT_DL[d.getDay()]}, ${d.getDate()} de ${PT_M[d.getMonth()]}`;
+}
+function fmtShort(ds) {
+  const d=ds2date(ds);
+  return `${d.getDate()} ${PT_M[d.getMonth()].slice(0,3)}`;
+}
+
+function getSemAtual() {
+  return SEMANAS.find(s=>{
+    const dates=weekDates(s.start, s.days);
+    return dates.includes(TODAY);
+  });
+}
+
+// Cálculo de progresso semanal (targets fixos por semana)
+function calcSemana(logs, startStr, numDays=7) {
+  const dates=weekDates(startStr, numDays);
+  const byAct={};
+  WD.forEach(a => {
+    const wDates=dates.filter(d=>!isFds(d));
+    const completedDays=wDates.length; // days available in this partial/full week
+    const tgtDays=Math.min(a.tgt, completedDays); // can't exceed available days
+    const n=wDates.filter(d=>logs[d]?.[a.id]).length;
+    byAct[a.id]={done:n*a.min, tgt:tgtDays*a.min, n, tgtDays};
+  });
+  FDS.forEach(a => {
+    const fDates=dates.filter(d=>isFds(d));
+    const completedDays=fDates.length;
+    const tgtDays=Math.min(a.tgt, completedDays);
+    const n=fDates.filter(d=>logs[d]?.[a.id]).length;
+    byAct[a.id]={done:n*a.min, tgt:tgtDays*a.min, n, tgtDays};
+  });
+  const done=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].done,0);
+  const tgt=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].tgt,0);
+  return {done, tgt, pct:tgt>0?Math.min(100,Math.round(done/tgt*100)):0, byAct};
+}
+
+// Cálculo mensal — itera cada dia do mês, prorated para tgt parciais
+function calcMes(logs, mesKey) {
+  const targetMonth=mesKey==="fev"?1:2;
+  const byAct={};
+  [...WD,...FDS].forEach(a=>{byAct[a.id]={done:0,tgt:0};});
+  let d=ds2date(FIRST_DAY);
+  const end=ds2date(LAST_DAY);
+  while(d<=end){
+    const ds=date2ds(d);
+    if(d.getMonth()===targetMonth){
+      const we=d.getDay()===0||d.getDay()===6;
+      if(!we){
+        WD.forEach(a=>{
+          if(logs[ds]?.[a.id]) byAct[a.id].done+=a.min;
+          byAct[a.id].tgt+=(a.tgt/5)*a.min;
+        });
+      } else {
+        FDS.forEach(a=>{
+          if(logs[ds]?.[a.id]) byAct[a.id].done+=a.min;
+          byAct[a.id].tgt+=(a.tgt/2)*a.min;
+        });
+      }
+    }
+    d.setDate(d.getDate()+1);
+  }
+  const done=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].done,0);
+  const tgt=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].tgt,0);
+  return {done:Math.round(done), tgt:Math.round(tgt), pct:tgt>0?Math.min(100,Math.round(done/tgt*100)):0,
+    byAct:Object.fromEntries(Object.entries(byAct).map(([k,v])=>[k,{done:Math.round(v.done),tgt:Math.round(v.tgt)}]))};
+}
+
+// Cálculo trimestral — itera todos os dias do período
+function calcQ(logs) {
+  const byAct={};
+  [...WD,...FDS].forEach(a=>{byAct[a.id]={done:0,tgt:0};});
+  let d=ds2date(FIRST_DAY);
+  const end=ds2date(LAST_DAY);
+  while(d<=end){
+    const ds=date2ds(d);
+    const we=d.getDay()===0||d.getDay()===6;
+    if(!we){
+      WD.forEach(a=>{
+        if(logs[ds]?.[a.id]) byAct[a.id].done+=a.min;
+        byAct[a.id].tgt+=(a.tgt/5)*a.min;
+      });
+    } else {
+      FDS.forEach(a=>{
+        if(logs[ds]?.[a.id]) byAct[a.id].done+=a.min;
+        byAct[a.id].tgt+=(a.tgt/2)*a.min;
+      });
+    }
+    d.setDate(d.getDate()+1);
+  }
+  const done=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].done,0);
+  const tgt=[...WD,...FDS].reduce((s,a)=>s+byAct[a.id].tgt,0);
+  return {done:Math.round(done), tgt:Math.round(tgt), pct:tgt>0?Math.min(100,Math.round(done/tgt*100)):0,
+    byAct:Object.fromEntries(Object.entries(byAct).map(([k,v])=>[k,{done:Math.round(v.done),tgt:Math.round(v.tgt)}]))};
+}
+
+function calcStreak(logs) {
+  let streak=0;
+  let d=ds2date(TODAY);
+  for(let i=0;i<60;i++){
+    const ds=date2ds(d);
+    if(ds<FIRST_DAY) break;
+    const dl=logs[ds]||{};
+    const acts=isFds(ds)?FDS:WD;
+    const done=acts.filter(a=>dl[a.id]).length;
+    if(done/acts.length>=0.6) streak++;
+    else break;
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
+}
+
+function xpDia(logs, ds) {
+  const dl=logs[ds]||{};
+  return (isFds(ds)?FDS:WD).reduce((s,a)=>s+(dl[a.id]?a.min:0),0);
+}
+
+function nivelLabel(pct) {
+  if(pct>=100) return {txt:"🏆 Meta Atingida!",c:GRN};
+  if(pct>=80)  return {txt:"🔥 Quase lá!",    c:YLW};
+  if(pct>=50)  return {txt:"💪 Bom caminho",  c:ACC};
+  if(pct>=20)  return {txt:"🚀 A arrancar",   c:"#A855F7"};
+  return             {txt:"⏳ Por começar",   c:SUB};
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SEED DATA — Semanas 1 e 2 de Fevereiro pré-preenchidas
+// ═══════════════════════════════════════════════════════════════════
+const SEED = {
+  "2026-02-02":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:0},
+  "2026-02-03":{w1:1,w2:1,w3:0,w4:1,w5:1,w6:1,w7:1,w8:0,w9:1},
+  "2026-02-04":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:1},
+  "2026-02-05":{w1:1,w2:1,w3:1,w4:1,w5:0,w6:1,w7:1,w8:1,w9:0},
+  "2026-02-06":{w1:1,w2:1,w3:1,w4:0,w5:1,w6:1,w7:0,w8:1,w9:1},
+  "2026-02-07":{e1:1,e2:1,e3:1,e4:1,e5:0,e6:1,e7:1},
+  "2026-02-08":{e1:1,e2:0,e3:0,e4:1,e5:1,e6:1,e7:0},
+  "2026-02-09":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:1},
+  "2026-02-10":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:1,w8:1,w9:1},
+  "2026-02-11":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:1},
+  "2026-02-12":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:0},
+  "2026-02-13":{w1:1,w2:1,w3:1,w4:1,w5:1,w6:1,w7:0,w8:1,w9:1},
+  "2026-02-14":{e1:1,e2:1,e3:0,e4:0,e5:1,e6:1,e7:1},
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// COMPONENTES BASE
+// ═══════════════════════════════════════════════════════════════════
+function Ring({pct=0,size=100,stroke=10,cor=ACC}) {
+  const r=(size-stroke)/2, circ=2*Math.PI*r, dash=(Math.min(pct,100)/100)*circ;
+  return (
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)",display:"block"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={cor} strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circ-dash}`} strokeLinecap="round"
+          style={{transition:"stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1)",
+            filter:`drop-shadow(0 0 8px ${cor}90)`}}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",
+        alignItems:"center",justifyContent:"center",textAlign:"center"}}>
+        <span style={{fontFamily:FONT_H,fontSize:size*.23,fontWeight:800,color:cor,lineHeight:1}}>{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+function Barra({v=0,max=1,cor=ACC,h=8}) {
+  const p=max>0?Math.min(100,(v/max)*100):0;
+  return (
+    <div style={{background:"rgba(255,255,255,0.07)",borderRadius:100,height:h,overflow:"hidden"}}>
+      <div style={{width:`${p}%`,height:"100%",borderRadius:100,background:cor,
+        boxShadow:`0 0 10px ${cor}60`,transition:"width 1.2s cubic-bezier(0.4,0,0.2,1)"}}/>
+    </div>
+  );
+}
+
+function Card({children,style={},glow=null}) {
+  return (
+    <div style={{background:C1,borderRadius:18,border:`1px solid ${BRD}`,
+      boxShadow:glow?`0 0 24px ${glow}20`:"none",...style}}>
+      {children}
+    </div>
+  );
+}
+
+function Tag({txt,cor}) {
+  return <span style={{background:cor+"25",color:cor,borderRadius:20,padding:"3px 10px",
+    fontSize:10,fontWeight:800,fontFamily:FONT_H,letterSpacing:.5,whiteSpace:"nowrap"}}>{txt}</span>;
+}
+
+function ActRow({act,feito=false,onToggle}) {
+  return (
+    <div onClick={onToggle}
+      style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
+        background:feito?act.cor+"14":"rgba(255,255,255,0.02)",
+        borderRadius:14,marginBottom:8,cursor:"pointer",
+        border:`1px solid ${feito?act.cor+"50":BRD}`,
+        transition:"all 0.2s",userSelect:"none"}}>
+      <span style={{fontSize:22,flexShrink:0}}>{act.em}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:700,color:feito?TXT:SUB,fontFamily:FONT_H,
+          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{act.nome}</div>
+        <div style={{fontSize:11,color:feito?act.cor:SUB,marginTop:1}}>{act.area} · {act.min} min</div>
+      </div>
+      <div style={{width:30,height:30,borderRadius:9,flexShrink:0,
+        background:feito?act.cor:"rgba(255,255,255,0.05)",
+        border:`2px solid ${feito?act.cor:"rgba(255,255,255,0.12)"}`,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        transition:"all 0.2s",boxShadow:feito?`0 0 14px ${act.cor}80`:"none"}}>
+        {feito&&<span style={{color:"#fff",fontSize:16,fontWeight:800}}>✓</span>}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAVEGADOR DE DATA
+// ═══════════════════════════════════════════════════════════════════
+function DateNav({date, onChange}) {
+  const canPrev = date > FIRST_DAY;
+  const canNext = date < LAST_DAY;
+  const isFuture = date > TODAY;
+  const isToday  = date === TODAY;
+  const isWE     = isFds(date);
+
+  return (
+    <div style={{marginBottom:16}}>
+      {/* Nav bar */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+        <button onClick={()=>canPrev&&onChange(addDays(date,-1))}
+          style={{width:38,height:38,borderRadius:11,border:`1px solid ${BRD}`,
+            background:canPrev?C3:"transparent",cursor:canPrev?"pointer":"default",
+            color:canPrev?TXT:BRD,fontSize:18,display:"flex",alignItems:"center",
+            justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>‹</button>
+
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{fontFamily:FONT_H,fontWeight:800,fontSize:16,color:TXT}}>
+            {fmtFull(date)}
+          </div>
+          <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:4,flexWrap:"wrap"}}>
+            {isToday && <Tag txt="HOJE" cor={GRN}/>}
+            {isFuture && <Tag txt="DIA FUTURO" cor={YLW}/>}
+            {date < TODAY && !isToday && <Tag txt="DIA PASSADO" cor={SUB}/>}
+            <Tag txt={isWE?"🌟 Fim de Semana":"💼 Dia Útil"} cor={isWE?ACC:ORG}/>
+          </div>
+        </div>
+
+        <button onClick={()=>canNext&&onChange(addDays(date,1))}
+          style={{width:38,height:38,borderRadius:11,border:`1px solid ${BRD}`,
+            background:canNext?C3:"transparent",cursor:canNext?"pointer":"default",
+            color:canNext?TXT:BRD,fontSize:18,display:"flex",alignItems:"center",
+            justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>›</button>
+      </div>
+
+      {/* Quick jump: HOJE */}
+      {!isToday && (
+        <div style={{textAlign:"center"}}>
+          <button onClick={()=>onChange(TODAY)}
+            style={{background:ACC+"20",border:`1px solid ${ACC}50`,color:ACC,
+              borderRadius:10,padding:"5px 14px",fontSize:11,fontWeight:700,
+              fontFamily:FONT_H,cursor:"pointer"}}>
+            ↩ Ir para Hoje
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mini calendário de semana para navegação rápida
+function WeekMiniCal({semana, logs, activeDate, onSelect}) {
+  const dates = weekDates(semana.start, semana.days);
+  return (
+    <div style={{display:"grid",gridTemplateColumns:`repeat(${semana.days},1fr)`,gap:4,marginBottom:12}}>
+      {dates.map(ds=>{
+        const acts = isFds(ds) ? FDS : WD;
+        const dl = logs[ds]||{};
+        const nDone = acts.filter(a=>dl[a.id]).length;
+        const pct = acts.length > 0 ? nDone/acts.length : 0;
+        const d = ds2date(ds);
+        const isFuture = ds > TODAY;
+        const isActive = ds === activeDate;
+        const hasData = nDone > 0;
+        const bg = isActive ? ACC : pct>=0.8 ? GRN+"40" : pct>=0.5 ? YLW+"30" : hasData ? ORG+"25" : C3;
+        const border = isActive ? `2px solid ${ACC}` : `1px solid ${BRD}`;
+        return (
+          <div key={ds} onClick={()=>onSelect(ds)}
+            style={{background:bg,border,borderRadius:8,padding:"5px 2px",
+              textAlign:"center",cursor:"pointer",transition:"all 0.15s"}}>
+            <div style={{fontSize:9,color:isActive?TXT:SUB,fontFamily:FONT_H,fontWeight:700}}>
+              {PT_D[d.getDay()]}
+            </div>
+            <div style={{fontSize:12,fontWeight:800,fontFamily:FONT_H,
+              color:isActive?TXT:isFuture?SUB:nDone>0?TXT:SUB}}>
+              {d.getDate()}
+            </div>
+            {!isFuture && (
+              <div style={{fontSize:8,color:isActive?TXT:pct>=0.8?GRN:pct>=0.5?YLW:ORG,marginTop:2}}>
+                {nDone}/{acts.length}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TAB 1 — REGISTAR (antigo "Hoje" + navegação por data)
+// ═══════════════════════════════════════════════════════════════════
+function RegistarView({logs, viewDate, setViewDate, onToggle}) {
+  const dl = logs[viewDate]||{};
+  const acts = isFds(viewDate) ? FDS : WD;
+  const nFeito = acts.filter(a=>dl[a.id]).length;
+  const pct = Math.round(nFeito/acts.length*100);
+  const streak = calcStreak(logs);
+  const xp = xpDia(logs, viewDate);
+  const isToday = viewDate === TODAY;
+  const corPct = pct>=80?GRN : pct>=50?YLW : ORG;
+  const msg = pct===100?"🏆 Dia Perfeito!" : pct>=70?"🔥 A arrasar!" : pct>=40?"💪 Vai a isso!" : "🚀 Vamos lá, André!";
+
+  return (
+    <div style={{padding:"22px 16px 0",fontFamily:FONT_B}}>
+      {/* Header */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:SUB,textTransform:"uppercase",letterSpacing:1.5,fontWeight:700,marginBottom:2}}>
+          1.º Trimestre 2026 · Fev 2 → Mar 31
+        </div>
+        <div style={{fontFamily:FONT_H,fontSize:28,fontWeight:800,color:TXT,lineHeight:1.1}}>
+          {isToday ? "Olá, André! 👋" : "Registar atividades 📝"}
+        </div>
+      </div>
+
+      {/* Date navigator */}
+      <DateNav date={viewDate} onChange={setViewDate}/>
+
+      {/* Stats — apenas para HOJE */}
+      {isToday && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+          {[
+            {ico:"🔥",v:streak,l:"Dias seguidos",c:ORG},
+            {ico:"⚡",v:xp,l:"Min de hoje",c:ACC},
+            {ico:"✅",v:`${nFeito}/${acts.length}`,l:"Feitas hoje",c:GRN},
+          ].map(s=>(
+            <Card key={s.l} style={{padding:"12px 8px",textAlign:"center"}}>
+              <div style={{fontSize:22}}>{s.ico}</div>
+              <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div>
+              <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.3}}>{s.l}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Progress ring */}
+      <Card style={{display:"flex",alignItems:"center",gap:16,padding:"18px",marginBottom:14}} glow={corPct}>
+        <Ring pct={pct} size={95} stroke={10} cor={corPct}/>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:FONT_H,fontSize:16,fontWeight:800,marginBottom:6,color:TXT}}>{msg}</div>
+          <div style={{color:SUB,fontSize:12,marginBottom:10,lineHeight:1.4}}>
+            {pct===100
+              ? "TODAS as atividades concluídas! Incrível! 🚀"
+              : nFeito===0
+                ? viewDate>TODAY
+                  ? "Dia futuro — podes pré-registar atividades."
+                  : "Ainda sem registos para este dia."
+                : `${acts.length-nFeito} atividade${acts.length-nFeito>1?"s":""} em falta para o dia perfeito.`}
+          </div>
+          <Barra v={nFeito} max={acts.length} cor={corPct} h={9}/>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:5,fontSize:10,color:SUB}}>
+            <span>{nFeito} feitas · {xpDia(logs,viewDate)} min</span>
+            <span>Meta: {acts.length} atividades</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Checklist */}
+      <div style={{fontFamily:FONT_H,fontSize:10,fontWeight:700,color:SUB,
+        textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>
+        {isFds(viewDate)?"🌟 Atividades — Fim de Semana":"📅 Atividades — Dia Útil"}
+      </div>
+
+      {acts.map(a=>(
+        <ActRow key={a.id} act={a} feito={!!dl[a.id]}
+          onToggle={()=>onToggle(viewDate, a.id)}/>
+      ))}
+
+      {/* Frase motivacional — só hoje */}
+      {isToday && (
+        <Card style={{padding:"16px",marginTop:4,background:ACC+"10",
+          border:`1px solid ${ACC}25`,textAlign:"center"}}>
+          <div style={{fontSize:18,marginBottom:4}}>💡</div>
+          <div style={{fontFamily:FONT_H,fontSize:12,fontWeight:700,color:ACC,marginBottom:4}}>
+            Frase do Dia
+          </div>
+          <div style={{fontSize:11,color:SUB,fontStyle:"italic",lineHeight:1.6}}>
+            "O sucesso é a soma de pequenos esforços repetidos dia após dia." — R. Collier
+          </div>
+        </Card>
+      )}
+      <div style={{height:20}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TAB 2 — SEMANA
+// ═══════════════════════════════════════════════════════════════════
+function SemanaView({logs, onGoToDate}) {
+  const cur = getSemAtual();
+  const [sel, setSel] = useState(cur?.num||1);
+  const sem = SEMANAS.find(s=>s.num===sel);
+  const prog = sem ? calcSemana(logs, sem.start, sem.days) : null;
+  const allActs = [...WD,...FDS];
+
+  return (
+    <div style={{padding:"22px 16px 0",fontFamily:FONT_B}}>
+      <div style={{fontFamily:FONT_H,fontSize:26,fontWeight:800,marginBottom:2}}>📊 Semana</div>
+      <div style={{color:SUB,fontSize:13,marginBottom:14}}>
+        Progresso semanal · 8 semanas + dias finais
+      </div>
+
+      {/* Selector de semanas */}
+      <div style={{display:"flex",gap:7,overflowX:"auto",marginBottom:14,paddingBottom:4}}>
+        {SEMANAS.map(s=>{
+          const isCur = s.num === cur?.num;
+          const allFuture = weekDates(s.start,s.days).every(d=>d>TODAY);
+          return (
+            <button key={s.num} onClick={()=>setSel(s.num)}
+              style={{flexShrink:0,padding:"7px 12px",borderRadius:10,border:"none",
+                cursor:"pointer",fontFamily:FONT_H,fontWeight:700,fontSize:11,
+                transition:"all 0.2s",
+                background:sel===s.num?ACC:C3,
+                color:sel===s.num?"#fff":allFuture?SUB:TXT}}>
+              {s.label}{isCur?" 🔴":""}
+            </button>
+          );
+        })}
+      </div>
+
+      {prog && (
+        <>
+          {/* Hero card */}
+          <Card style={{display:"flex",gap:16,padding:"18px",marginBottom:12}}
+            glow={prog.pct>=80?GRN:prog.pct>=50?ACC:ORG}>
+            <Ring pct={prog.pct} size={95} stroke={10}
+              cor={prog.pct>=80?GRN:prog.pct>=50?YLW:ORG}/>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:FONT_H,fontSize:14,fontWeight:700,marginBottom:8,color:ACC}}>
+                {sem?.label}
+                {sem?.days&&sem.days<7?` · (${sem.days} dias)`:""}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+                <div style={{background:GRN+"15",borderRadius:10,padding:"8px 10px"}}>
+                  <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:GRN}}>{prog.done}</div>
+                  <div style={{fontSize:9,color:SUB}}>min realizados</div>
+                </div>
+                <div style={{background:C3,borderRadius:10,padding:"8px 10px"}}>
+                  <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:SUB}}>{prog.tgt}</div>
+                  <div style={{fontSize:9,color:SUB}}>min meta</div>
+                </div>
+              </div>
+              <Tag txt={prog.pct>=100?"🏆 Perfeito!":prog.pct>=70?"🔥 Excelente!":prog.pct>=50?"💪 Bom!":"🚀 Continua!"}
+                cor={prog.pct>=80?GRN:prog.pct>=50?YLW:ORG}/>
+            </div>
+          </Card>
+
+          {/* Mini calendário com clique para navegar */}
+          <div style={{fontFamily:FONT_H,fontSize:10,fontWeight:700,color:SUB,
+            textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>
+            Dias da semana — Toca para registar
+          </div>
+          <Card style={{padding:"12px",marginBottom:12}}>
+            <WeekMiniCal semana={sem} logs={logs} activeDate={TODAY}
+              onSelect={ds=>onGoToDate(ds)}/>
+            <div style={{fontSize:10,color:SUB,textAlign:"center"}}>
+              Verde ≥80% · Amarelo ≥50% · Laranja &lt;50% · Cinza = sem dados
+            </div>
+          </Card>
+
+          {/* Progresso por atividade */}
+          <div style={{fontFamily:FONT_H,fontSize:10,fontWeight:700,color:SUB,
+            textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>
+            Por atividade
+          </div>
+          {allActs.map(a=>{
+            const p=prog.byAct[a.id]||{done:0,tgt:1,n:0,tgtDays:a.tgt};
+            const pct=p.tgt>0?Math.min(100,Math.round(p.done/p.tgt*100)):0;
+            const cor=pct>=100?GRN:pct>=60?YLW:ORG;
+            return (
+              <Card key={a.id} style={{padding:"11px 14px",marginBottom:7}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+                  <span style={{fontSize:20,flexShrink:0}}>{a.em}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,fontFamily:FONT_H,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.nome}</div>
+                    <div style={{fontSize:10,color:a.cor,marginTop:1}}>{a.area}</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontFamily:FONT_H,fontSize:18,fontWeight:800,color:cor}}>{pct}%</div>
+                    <div style={{fontSize:9,color:SUB}}>{p.n}/{p.tgtDays} dias</div>
+                  </div>
+                </div>
+                <Barra v={p.done} max={p.tgt} cor={a.cor} h={6}/>
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:SUB}}>
+                  <span style={{color:GRN}}>✅ {p.done} min</span>
+                  <span style={{color:SUB}}>🎯 {p.tgt} min</span>
+                </div>
+              </Card>
+            );
+          })}
+        </>
+      )}
+      <div style={{height:20}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CUSTOM TOOLTIP PARA GRÁFICOS
+// ═══════════════════════════════════════════════════════════════════
+const CTip = ({active,payload}) => {
+  if(!active||!payload?.length) return null;
+  return (
+    <div style={{background:C2,border:`1px solid ${BRD}`,borderRadius:10,
+      padding:"8px 12px",fontSize:11,color:TXT}}>
+      <div style={{fontWeight:700,marginBottom:4,fontFamily:FONT_H}}>
+        {payload[0]?.payload?.nome?.slice(0,22)}
+      </div>
+      {payload.map((p,i)=>(
+        <div key={i} style={{color:p.fill||TXT}}>
+          {p.name==="done"?"✅ Feito":"🎯 Meta"}: {Math.round(p.value)} min
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// TAB 3 — MÊS
+// ═══════════════════════════════════════════════════════════════════
+function MesView({logs}) {
+  const [sel, setSel] = useState("fev");
+  const prog = calcMes(logs, sel);
+  const allActs = [...WD,...FDS];
+  const corG = prog.pct>=80?GRN:prog.pct>=50?YLW:ORG;
+
+  const chartData = allActs.map(a=>({
+    nome: a.nome, em: a.em,
+    done: prog.byAct[a.id]?.done||0,
+    meta: prog.byAct[a.id]?.tgt||0,
+    cor: a.cor,
+    pct: prog.byAct[a.id]?.tgt>0
+      ? Math.min(100,Math.round((prog.byAct[a.id]?.done||0)/prog.byAct[a.id]?.tgt*100)):0
+  }));
+
+  return (
+    <div style={{padding:"22px 16px 0",fontFamily:FONT_B}}>
+      <div style={{fontFamily:FONT_H,fontSize:26,fontWeight:800,marginBottom:2}}>📅 Mês</div>
+      <div style={{color:SUB,fontSize:13,marginBottom:14}}>Resultados mensais vs metas</div>
+
+      {/* Selector de mês */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        {[
+          {k:"fev",l:"Fevereiro",s:"2 semanas · 20 dias úteis"},
+          {k:"mar",l:"Março",    s:"6 sem. + 2 dias · 22 úteis"},
+        ].map(m=>(
+          <div key={m.k} onClick={()=>setSel(m.k)}
+            style={{padding:"12px 14px",borderRadius:14,cursor:"pointer",textAlign:"center",
+              background:sel===m.k?ACC+"22":C2,
+              border:`2px solid ${sel===m.k?ACC:"transparent"}`,transition:"all 0.2s"}}>
+            <div style={{fontFamily:FONT_H,fontWeight:700,fontSize:15,
+              color:sel===m.k?ACC:TXT}}>{m.l}</div>
+            <div style={{fontSize:10,color:SUB,marginTop:2}}>{m.s}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Hero card */}
+      <Card style={{display:"flex",gap:18,padding:"18px",marginBottom:12}} glow={corG}>
+        <Ring pct={prog.pct} size={100} stroke={11} cor={corG}/>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:FONT_H,fontSize:15,fontWeight:800,marginBottom:10}}>
+            {sel==="fev"?"Fevereiro 2026":"Março 2026"}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+            <div style={{background:GRN+"15",borderRadius:10,padding:"9px"}}>
+              <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:GRN}}>{prog.done}</div>
+              <div style={{fontSize:9,color:SUB}}>min realizados</div>
+            </div>
+            <div style={{background:C3,borderRadius:10,padding:"9px"}}>
+              <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:SUB}}>{prog.tgt}</div>
+              <div style={{fontSize:9,color:SUB}}>min meta</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Gráfico de barras */}
+      <Card style={{padding:"14px",marginBottom:12}}>
+        <div style={{fontFamily:FONT_H,fontSize:12,fontWeight:700,marginBottom:10}}>
+          Minutos por Atividade
+        </div>
+        <div style={{height:160}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{top:0,right:0,bottom:0,left:-28}}>
+              <XAxis dataKey="em" tick={{fontSize:13,fill:SUB}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontSize:8,fill:SUB}} axisLine={false} tickLine={false}/>
+              <Tooltip content={<CTip/>}/>
+              <Bar dataKey="meta" fill="rgba(255,255,255,0.07)" radius={[4,4,0,0]} name="meta"/>
+              <Bar dataKey="done" radius={[4,4,0,0]} name="done">
+                {chartData.map((e,i)=><Cell key={i} fill={e.cor}/>)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:6}}>
+          {[{c:"rgba(255,255,255,0.2)",l:"Meta"},{c:ACC,l:"Realizado"}].map(x=>(
+            <div key={x.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:SUB}}>
+              <div style={{width:9,height:9,borderRadius:2,background:x.c}}/>
+              <span>{x.l}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Detalhe por atividade */}
+      <div style={{fontFamily:FONT_H,fontSize:10,fontWeight:700,color:SUB,
+        textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>
+        Detalhe por atividade
+      </div>
+      {allActs.map(a=>{
+        const d=prog.byAct[a.id];
+        const pct=d?.tgt>0?Math.min(100,Math.round(d.done/d.tgt*100)):0;
+        const lv=nivelLabel(pct);
+        return (
+          <Card key={a.id} style={{padding:"11px 14px",marginBottom:7}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+              <div style={{width:38,height:38,borderRadius:10,background:a.cor+"22",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:18,flexShrink:0}}>{a.em}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,fontFamily:FONT_H,
+                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.nome}</div>
+                <div style={{fontSize:10,color:a.cor,marginTop:1}}>{a.area}</div>
+              </div>
+              <div style={{fontFamily:FONT_H,fontSize:18,fontWeight:800,color:lv.c,flexShrink:0}}>
+                {pct}%
+              </div>
+            </div>
+            <Barra v={d?.done||0} max={d?.tgt||1} cor={a.cor} h={7}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6,fontSize:9}}>
+              <span style={{color:GRN,fontWeight:700}}>✅ {d?.done||0} min</span>
+              <Tag txt={lv.txt} cor={lv.c}/>
+              <span style={{color:SUB}}>🎯 {d?.tgt||0} min</span>
+            </div>
+          </Card>
+        );
+      })}
+      <div style={{height:20}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TAB 4 — TRIMESTRE
+// ═══════════════════════════════════════════════════════════════════
+function TrimestreView({logs}) {
+  const prog = calcQ(logs);
+  const feb  = calcMes(logs,"fev");
+  const mar  = calcMes(logs,"mar");
+  const corG = prog.pct>=80?GRN:prog.pct>=50?YLW:ORG;
+  const hT=Math.floor(prog.done/60), mT=prog.done%60;
+  const hTgt=Math.floor(prog.tgt/60), mTgt=prog.tgt%60;
+
+  const radarData = SMART.map(sg=>{
+    const done=sg.ids.reduce((s,id)=>s+(prog.byAct[id]?.done||0),0);
+    const pct=sg.tgt>0?Math.min(100,Math.round(done/sg.tgt*100)):0;
+    return {area:sg.label.split(" ")[0], pct, fullMark:100};
+  });
+
+  // Evolução semanal (minutos realizados por semana)
+  const semChart = SEMANAS.map(s=>{
+    const p = calcSemana(logs, s.start, s.days);
+    return {
+      label: s.num<=8?`S${s.num}`:"Fin",
+      done: p.done,
+      tgt: p.tgt,
+    };
+  });
+
+  return (
+    <div style={{padding:"22px 16px 0",fontFamily:FONT_B}}>
+      <div style={{fontFamily:FONT_H,fontSize:26,fontWeight:800,marginBottom:2}}>🏆 Trimestre</div>
+      <div style={{color:SUB,fontSize:13,marginBottom:14}}>
+        1.º Trimestre 2026 · Fev 2 → Mar 31 · Metas SMART
+      </div>
+
+      {/* Hero ring */}
+      <Card style={{padding:"22px",textAlign:"center",marginBottom:12}} glow={corG}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+          <Ring pct={prog.pct} size={140} stroke={14} cor={corG}/>
+        </div>
+        <div style={{fontFamily:FONT_H,fontSize:18,fontWeight:800,marginBottom:4}}>
+          {prog.pct>=80?"🔥 A arrasar, André!":prog.pct>=50?"💪 Bom trabalho!":"🚀 Começa forte!"}
+        </div>
+        <div style={{color:SUB,fontSize:12,marginBottom:14}}>
+          {prog.done} min de {prog.tgt} min meta total do trimestre
+        </div>
+
+        {/* Meses */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,textAlign:"left"}}>
+          {[
+            {l:"Fevereiro",p:feb.pct,done:feb.done,tgt:feb.tgt,c:ACC,s:"20 dias úteis"},
+            {l:"Março",    p:mar.pct,done:mar.done,tgt:mar.tgt,c:mar.done>0?YLW:SUB,s:"22 dias úteis + 2 extras"},
+          ].map(m=>(
+            <div key={m.l} style={{background:C3,borderRadius:12,padding:"12px"}}>
+              <div style={{fontFamily:FONT_H,fontWeight:700,fontSize:12,color:TXT,marginBottom:2}}>{m.l}</div>
+              <div style={{fontSize:9,color:SUB,marginBottom:4}}>{m.s}</div>
+              <div style={{fontFamily:FONT_H,fontSize:22,fontWeight:800,color:m.c}}>{m.p}%</div>
+              <div style={{fontSize:9,color:SUB,marginBottom:6}}>{m.done} / {m.tgt} min</div>
+              <Barra v={m.done} max={m.tgt} cor={m.c} h={5}/>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Gráfico de evolução semanal */}
+      <Card style={{padding:"14px",marginBottom:12}}>
+        <div style={{fontFamily:FONT_H,fontSize:12,fontWeight:700,marginBottom:4}}>
+          Evolução Semanal (min realizados)
+        </div>
+        <div style={{fontSize:10,color:SUB,marginBottom:10}}>
+          Semanas 1–8 + Dias Finais
+        </div>
+        <div style={{height:140}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={semChart} margin={{top:0,right:0,bottom:0,left:-28}}>
+              <XAxis dataKey="label" tick={{fontSize:9,fill:SUB}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontSize:8,fill:SUB}} axisLine={false} tickLine={false}/>
+              <Tooltip content={({active,payload})=>active&&payload?.length?(
+                <div style={{background:C2,border:`1px solid ${BRD}`,borderRadius:8,
+                  padding:"6px 10px",fontSize:10,color:TXT}}>
+                  <div style={{color:GRN}}>✅ {payload[0]?.value} min</div>
+                  <div style={{color:SUB}}>🎯 {payload[1]?.value} min</div>
+                </div>):null}/>
+              <Bar dataKey="tgt"  fill="rgba(255,255,255,0.08)" radius={[3,3,0,0]}/>
+              <Bar dataKey="done" fill={ACC} radius={[3,3,0,0]}
+                style={{filter:`drop-shadow(0 0 4px ${ACC}80)`}}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Radar */}
+      <Card style={{padding:"14px",marginBottom:12}}>
+        <div style={{fontFamily:FONT_H,fontSize:12,fontWeight:700,marginBottom:4}}>
+          Radar das Áreas
+        </div>
+        <div style={{fontSize:10,color:SUB,marginBottom:8}}>% da meta trimestral por área</div>
+        <div style={{height:190}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="65%">
+              <PolarGrid stroke="rgba(255,255,255,0.08)"/>
+              <PolarAngleAxis dataKey="area" tick={{fontSize:9,fill:SUB}}/>
+              <Radar name="Progresso" dataKey="pct" stroke={ACC} fill={ACC} fillOpacity={0.2} strokeWidth={2}/>
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* SMART por área */}
+      <div style={{fontFamily:FONT_H,fontSize:10,fontWeight:700,color:SUB,
+        textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>
+        🎯 Metas SMART Trimestrais
+      </div>
+
+      {SMART.map(sg=>{
+        const done=sg.ids.reduce((s,id)=>s+(prog.byAct[id]?.done||0),0);
+        const pct=sg.tgt>0?Math.min(100,Math.round(done/sg.tgt*100)):0;
+        const lv=nivelLabel(pct);
+        return (
+          <Card key={sg.label} style={{padding:"14px 16px",marginBottom:9}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:9}}>
+              <div style={{width:44,height:44,borderRadius:12,background:sg.cor+"22",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
+                {sg.icon}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:FONT_H,fontSize:14,fontWeight:700,color:TXT}}>{sg.label}</div>
+                <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.4}}>{sg.goal}</div>
+              </div>
+              <div style={{fontFamily:FONT_H,fontSize:22,fontWeight:800,color:sg.cor,flexShrink:0}}>
+                {pct}%
+              </div>
+            </div>
+            <Barra v={done} max={sg.tgt} cor={sg.cor} h={9}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:7}}>
+              <span style={{fontSize:10,color:SUB}}>{done} de {sg.tgt} min</span>
+              <Tag txt={lv.txt} cor={lv.c}/>
+            </div>
+          </Card>
+        );
+      })}
+
+      {/* Resumo final */}
+      <Card style={{background:`linear-gradient(135deg,${ACC}16,${GRN}0c)`,
+        border:`1px solid ${ACC}35`,textAlign:"center",padding:"20px",marginTop:4}}>
+        <div style={{fontSize:34}}>🌟</div>
+        <div style={{fontFamily:FONT_H,fontSize:16,fontWeight:800,marginTop:10,marginBottom:4}}>
+          Resumo Total do Trimestre
+        </div>
+        <div style={{color:SUB,fontSize:11,marginBottom:10}}>
+          Fev 2 → Mar 31 · 42 dias úteis · 16 fins de semana
+        </div>
+        <div style={{fontFamily:FONT_H,fontSize:34,fontWeight:800,color:corG,marginBottom:2}}>
+          {hT}h {mT}m
+        </div>
+        <div style={{color:SUB,fontSize:11,marginBottom:12}}>
+          de {hTgt}h {mTgt}m meta total
+        </div>
+        <div style={{marginBottom:14}}>
+          <Barra v={prog.done} max={prog.tgt} cor={corG} h={12}/>
+        </div>
+        <Tag txt={`${prog.pct}% da meta trimestral`} cor={corG}/>
+      </Card>
+      <div style={{height:20}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAV BAR
+// ═══════════════════════════════════════════════════════════════════
+const TABS = [
+  {id:"registar",  ico:"📝", l:"Registar"},
+  {id:"semana",    ico:"📊", l:"Semana"},
+  {id:"mes",       ico:"📅", l:"Mês"},
+  {id:"trimestre", ico:"🏆", l:"Trimestre"},
+];
+
+function Nav({tab, onChange}) {
+  return (
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
+      width:"100%",maxWidth:480,background:C1,borderTop:`1px solid ${BRD}`,
+      display:"flex",justifyContent:"space-around",padding:"8px 0 20px",
+      zIndex:100,backdropFilter:"blur(20px)"}}>
+      {TABS.map(t=>(
+        <div key={t.id} onClick={()=>onChange(t.id)}
+          style={{display:"flex",flexDirection:"column",alignItems:"center",
+            gap:3,cursor:"pointer",padding:"5px 14px",borderRadius:12,
+            background:tab===t.id?ACC+"20":"transparent",transition:"all 0.2s"}}>
+          <span style={{fontSize:22}}>{t.ico}</span>
+          <span style={{fontSize:9,fontWeight:700,fontFamily:FONT_H,
+            color:tab===t.id?ACC:SUB,transition:"color 0.2s"}}>{t.l}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// APP ROOT
+// ═══════════════════════════════════════════════════════════════════
+function App() {
+  const [logs,     setLogs]     = useState({});
+  const [tab,      setTab]      = useState("registar");
+  const [viewDate, setViewDate] = useState(TODAY);
+  const [ready,    setReady]    = useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const r = await window.storage.get("andre_q1_2026_v2");
+        setLogs(r ? JSON.parse(r.value) : SEED);
+        if(!r) await window.storage.set("andre_q1_2026_v2", JSON.stringify(SEED));
+      } catch { setLogs(SEED); }
+      setReady(true);
+    })();
+  },[]);
+
+  const toggle = useCallback(async (date, actId) => {
+    setLogs(prev=>{
+      const updated = {
+        ...prev,
+        [date]: {...(prev[date]||{}), [actId]: !(prev[date]?.[actId])}
+      };
+      window.storage.set("andre_q1_2026_v2", JSON.stringify(updated)).catch(()=>{});
+      return updated;
+    });
+  },[]);
+
+  // Navegar para data e abrir tab Registar
+  const goToDate = useCallback((date)=>{
+    setViewDate(date);
+    setTab("registar");
+  },[]);
+
+  if(!ready) return (
+    <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:16}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Nunito:wght@400;600;700&display=swap');`}</style>
+      <div style={{fontSize:56}}>📅</div>
+      <div style={{fontFamily:FONT_H,fontSize:20,fontWeight:800,color:ACC}}>A carregar…</div>
+      <div style={{color:SUB,fontSize:12}}>Planner Q1 · André G.</div>
+    </div>
+  );
+
+  return (
+    <div style={{background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",
+      fontFamily:FONT_B,color:TXT,position:"relative"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Nunito:wght@400;600;700&display=swap');
+        *{box-sizing:border-box;} body{margin:0;background:${BG};}
+        ::-webkit-scrollbar{width:0;}
+      `}</style>
+
+      {/* Fundo com gradiente suave */}
+      <div style={{position:"fixed",inset:0,maxWidth:480,margin:"0 auto",zIndex:0,pointerEvents:"none",
+        backgroundImage:`radial-gradient(circle at 20% 20%,${ACC}08 0%,transparent 55%),
+          radial-gradient(circle at 80% 80%,${GRN}06 0%,transparent 55%)`}}/>
+
+      <div style={{position:"relative",zIndex:1,overflowY:"auto",height:"100vh",paddingBottom:90}}>
+        {tab==="registar"  && <RegistarView logs={logs} viewDate={viewDate}
+          setViewDate={setViewDate} onToggle={toggle}/>}
+        {tab==="semana"    && <SemanaView   logs={logs} onGoToDate={goToDate}/>}
+        {tab==="mes"       && <MesView      logs={logs}/>}
+        {tab==="trimestre" && <TrimestreView logs={logs}/>}
+      </div>
+
+      <Nav tab={tab} onChange={setTab}/>
+    </div>
+  );
+}
+
+
+    // Render da aplicação
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+  
+  <!-- Service Worker para PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('✅ SW registado'))
+          .catch(err => console.log('SW não disponível'));
+      });
+    }
+  </script>
+</body>
+</html>
