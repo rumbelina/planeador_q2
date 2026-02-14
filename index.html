@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6366F1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Planeador André Q1 2025</title>
+  
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      background: #080D18;
+    }
+    #root { 
+      width: 100%; 
+      min-height: 100vh; 
+    }
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: #080D18;
+      color: #F1F5F9;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(99, 102, 241, 0.1);
+      border-top-color: #6366F1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div style="font-size: 48px;">📅</div>
+    <div class="spinner"></div>
+    <div style="font-size: 14px; color: #64748B;">A carregar...</div>
+  </div>
+  <div id="root"></div>
+  
+  <script>
+    // Garantir que todos os scripts carregam na ordem certa
+    window.scriptsLoaded = {
+      react: false,
+      reactDom: false,
+      recharts: false,
+      babel: false
+    };
+    
+    function checkAllLoaded() {
+      const all = Object.values(window.scriptsLoaded).every(v => v);
+      if (all) {
+        console.log('✅ Todos os scripts carregados!');
+        initApp();
+      }
+    }
+    
+    // Mock do window.storage
+    window.storage = {
+      async get(key) {
+        try {
+          const value = localStorage.getItem(key);
+          return value ? { key, value, shared: false } : null;
+        } catch (e) {
+          return null;
+        }
+      },
+      async set(key, value) {
+        try {
+          localStorage.setItem(key, value);
+          return { key, value, shared: false };
+        } catch (e) {
+          return null;
+        }
+      },
+      async delete(key) {
+        try {
+          localStorage.removeItem(key);
+          return { key, deleted: true, shared: false };
+        } catch (e) {
+          return null;
+        }
+      },
+      async list(prefix) {
+        try {
+          const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+          return { keys, prefix, shared: false };
+        } catch (e) {
+          return { keys: [], shared: false };
+        }
+      }
+    };
+  </script>
+  
+  <!-- Carregar scripts sequencialmente -->
+  <script>
+    // React
+    const reactScript = document.createElement('script');
+    reactScript.src = 'https://unpkg.com/react@18.2.0/umd/react.production.min.js';
+    reactScript.crossOrigin = 'anonymous';
+    reactScript.onload = () => {
+      console.log('✅ React carregado');
+      window.scriptsLoaded.react = true;
+      loadReactDom();
+    };
+    reactScript.onerror = () => console.error('❌ Erro ao carregar React');
+    document.body.appendChild(reactScript);
+    
+    function loadReactDom() {
+      const reactDomScript = document.createElement('script');
+      reactDomScript.src = 'https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js';
+      reactDomScript.crossOrigin = 'anonymous';
+      reactDomScript.onload = () => {
+        console.log('✅ ReactDOM carregado');
+        window.scriptsLoaded.reactDom = true;
+        loadRecharts();
+      };
+      reactDomScript.onerror = () => console.error('❌ Erro ao carregar ReactDOM');
+      document.body.appendChild(reactDomScript);
+    }
+    
+    function loadRecharts() {
+      const rechartsScript = document.createElement('script');
+      rechartsScript.src = 'https://unpkg.com/recharts@2.5.0/dist/Recharts.js';
+      rechartsScript.onload = () => {
+        console.log('✅ Recharts carregado');
+        window.scriptsLoaded.recharts = true;
+        loadBabel();
+      };
+      rechartsScript.onerror = () => console.error('❌ Erro ao carregar Recharts');
+      document.body.appendChild(rechartsScript);
+    }
+    
+    function loadBabel() {
+      const babelScript = document.createElement('script');
+      babelScript.src = 'https://unpkg.com/@babel/standalone@7.23.5/babel.min.js';
+      babelScript.onload = () => {
+        console.log('✅ Babel carregado');
+        window.scriptsLoaded.babel = true;
+        checkAllLoaded();
+      };
+      babelScript.onerror = () => console.error('❌ Erro ao carregar Babel');
+      document.body.appendChild(babelScript);
+    }
+    
+    function initApp() {
+      // Remover loading
+      const loading = document.getElementById('loading');
+      if (loading) loading.style.display = 'none';
+      
+      // Criar script com a app
+      const appScript = document.createElement('script');
+      appScript.type = 'text/babel';
+      appScript.setAttribute('data-type', 'module');
+      appScript.textContent = `
+        const { useState, useEffect, useCallback } = React;
+        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } = Recharts;
+        
+        // App simples de teste primeiro
+        function App() {
+          const [mounted, setMounted] = useState(false);
+          
+          useEffect(() => {
+            setMounted(true);
+            console.log('✅ App React montada!');
+          }, []);
+          
+          if (!mounted) {
+            return (
+              <div style={{
+                background: '#080D18',
+                minHeight: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#F1F5F9',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                padding: '20px',
+                gap: '20px'
+              }}>
+                <div style={{fontSize: '64px'}}>📅</div>
+                <div style={{fontSize: '24px', fontWeight: 'bold', color: '#6366F1'}}>
+                  A inicializar...
+                </div>
+              </div>
+            );
+          }
+          
+          return (
+            <div style={{
+              background: '#080D18',
+              minHeight: '100vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#F1F5F9',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              padding: '40px 20px',
+              gap: '30px'
+            }}>
+              <div style={{fontSize: '64px'}}>🎯</div>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: 'bold',
+                color: '#6366F1',
+                margin: 0,
+                textAlign: 'center'
+              }}>
+                Planeador André Q1 2025
+              </h1>
+              
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                width: '100%',
+                maxWidth: '400px'
+              }}>
+                <div style={{
+                  background: 'rgba(34, 211, 160, 0.1)',
+                  border: '1px solid rgba(34, 211, 160, 0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  color: '#22D3A0'
+                }}>
+                  ✅ React funcionando!
+                </div>
+                <div style={{
+                  background: 'rgba(34, 211, 160, 0.1)',
+                  border: '1px solid rgba(34, 211, 160, 0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  color: '#22D3A0'
+                }}>
+                  ✅ Recharts carregado!
+                </div>
+                <div style={{
+                  background: 'rgba(34, 211, 160, 0.1)',
+                  border: '1px solid rgba(34, 211, 160, 0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  color: '#22D3A0'
+                }}>
+                  ✅ App pronta para uso!
+                </div>
+              </div>
+              
+              <div style={{
+                background: 'rgba(99, 102, 241, 0.1)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: '16px',
+                padding: '24px',
+                textAlign: 'center',
+                width: '100%',
+                maxWidth: '400px'
+              }}>
+                <div style={{fontSize: '48px', marginBottom: '16px'}}>🚀</div>
+                <div style={{fontSize: '18px', marginBottom: '8px', fontWeight: 'bold'}}>
+                  App Instalada com Sucesso!
+                </div>
+                <div style={{fontSize: '14px', color: '#64748B', lineHeight: '1.6'}}>
+                  Agora podes instalar no teu telemóvel:<br/>
+                  <strong>Android:</strong> Chrome → ⋮ → "Adicionar ao ecrã inicial"<br/>
+                  <strong>iPhone:</strong> Safari → ⬆️ → "Adicionar ao Ecrã Principal"
+                </div>
+              </div>
+              
+              <div style={{
+                fontSize: '14px',
+                color: '#64748B',
+                textAlign: 'center',
+                marginTop: '20px'
+              }}>
+                Versão de teste simplificada<br/>
+                A app completa será carregada em breve
+              </div>
+            </div>
+          );
+        }
+        
+        // Renderizar
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        console.log('✅ App renderizada!');
+      `;
+      document.body.appendChild(appScript);
+    }
+  </script>
+  
+  <!-- Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('✅ SW registado'))
+          .catch(err => console.log('SW não disponível (normal em desenvolvimento)'));
+      });
+    }
+  </script>
+</body>
+</html>
